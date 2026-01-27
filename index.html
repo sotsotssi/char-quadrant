@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>성향 사분면 생성기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+            overscroll-behavior: none;
+        }
+
+        /* 캔버스 컨테이너 */
+        .canvas-container {
+            position: relative;
+            background-color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            touch-action: none;
+            padding: 10px;
+            margin-top: 100px;
+            min-width: 600px;
+            min-height: 600px;
+        }
+
+        /* 텍스트 입력창 */
+        .floating-input {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #3b82f6;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 14px;
+            text-align: center;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .floating-input:focus {
+            outline: none;
+        }
+
+        /* 컨트롤 패널 */
+        .control-panel {
+            scrollbar-width: thin;
+        }
+        
+        .color-option {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
+        }
+        .color-option.selected {
+            border-color: #333;
+            transform: scale(1.1);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+        }
+        /* 커스텀 컬러 피커 스타일 */
+        .custom-color-wrapper {
+            position: relative;
+            overflow: hidden;
+            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+        }
+        .custom-color-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+        }
+
+        /* 캐릭터 리스트 아이템 */
+        .char-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .char-item:hover {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+        .char-item.active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            box-shadow: 0 0 0 1px #3b82f6;
+        }
+        .char-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .char-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+        .char-status-active { background-color: #10b981; }
+        .char-status-inactive { background-color: #e5e7eb; }
+
+        /* 모달 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+        .modal-overlay.open .modal-content {
+            transform: translateY(0);
+        }
+
+        /* 탭 스타일 */
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            color: #db2777;
+            border-bottom-color: #db2777;
+            font-weight: 700;
+        }
+
+        /* 툴팁/알림 */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 150;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- 왼쪽: 컨트롤 패널 -->
+    <div class="control-panel w-full lg:w-96 bg-white border-r border-gray-200 flex flex-col h-[40vh] lg:h-full overflow-y-auto">
+        <div class="p-6 space-y-6">
+            <h1 class="text-2xl font-bold text-gray-800"><i class="fas fa-chart-scatter mr-2"></i>성향 사분면 생성기 <a href="https://x.com/bb_uu_t" target="_blank"><span class="text-xs font-normal text-slate-500 dark:text-slate-400 ml-1">@bb_uu_t</span></a></h1>
+            
+            <div class="bg-blue-50 p-3 rounded text-xs text-blue-800">
+                <i class="fas fa-info-circle mr-1"></i>제목이나 축의 이름을 <strong>더블 클릭</strong>하여 수정할 수 있습니다.<br>
+                <i class="fas fa-list mr-1"></i>목록에서 캐릭터를 누르면 해당 캐릭터가 선택됩니다.
+            </div>
+
+            <!-- 캐릭터 추가 섹션 -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 class="font-bold text-gray-700 mb-3 text-sm">새 캐릭터 추가</h3>
+                
+                <div class="space-y-3">
+                    <input type="text" id="charName" placeholder="이름 입력" class="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:border-blue-500">
+                    
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 font-medium">유형:</span>
+                        <label class="flex items-center text-sm cursor-pointer">
+                            <input type="radio" name="charType" value="dot" checked class="mr-1" onchange="toggleImageUpload(false)"> 색상
+                        </label>
+                        <label class="flex items-center text-sm cursor-pointer">
+                            <input type="radio" name="charType" value="image" class="mr-1" onchange="toggleImageUpload(true)"> 이미지
+                        </label>
+                    </div>
+
+                    <div id="colorPickerArea" class="grid grid-cols-9 gap-y-2 gap-x-1 justify-items-center">
+                        <!-- JS로 색상 옵션 생성 -->
+                    </div>
+
+                    <!-- 이미지 업로드 -->
+                    <div id="imageUploadArea" class="hidden">
+                        <input type="file" id="imageInput" accept="image/*" class="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="text-[10px] text-gray-400 mt-1">* 가로 50px로 자동 조절됩니다.</p>
+                    </div>
+
+                    <button onclick="addCharacter()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition text-sm font-medium">
+                        <i class="fas fa-plus mr-1"></i> 추가하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 캐릭터 리스트 -->
+            <div class="flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-gray-700 text-sm">캐릭터 목록</h3>
+                    <span id="charCount" class="text-xs text-gray-400">0명</span>
+                </div>
+                <div id="characterList" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                    <div class="text-xs text-gray-400 text-center py-4">등록된 캐릭터가 없습니다.</div>
+                </div>
+            </div>
+
+            <!-- 기능 버튼들 -->
+            <div class="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2">
+                <button onclick="deleteSelected()" class="bg-white border border-red-200 text-red-600 py-2 rounded hover:bg-red-50 transition text-sm font-medium">
+                    <i class="fas fa-trash-alt mr-1"></i> 점 삭제
+                </button>
+                <button onclick="openCompModal()" class="bg-pink-50 border border-pink-200 text-pink-600 py-2 rounded hover:bg-pink-100 transition text-sm font-medium">
+                    <i class="fas fa-heart mr-1"></i> 궁합 보기
+                </button>
+            </div>
+
+            <!-- 데이터 관리 섹션 -->
+            <div class="space-y-3 pt-4 border-t border-gray-100">
+                <h3 class="font-bold text-blue-600 text-sm"><i class="fas fa-share-alt mr-1"></i>현재 페이지 간편 공유</h3>
+                <textarea id="pageDataArea" class="w-full h-16 p-2 text-xs border border-blue-200 rounded resize-none font-mono bg-blue-50 focus:outline-none focus:border-blue-400" placeholder="현재 페이지의 캐릭터 좌표 정보만 짧게 생성됩니다."></textarea>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="copyPageData()" class="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs font-medium">
+                        <i class="fas fa-copy"></i> 좌표 복사
+                    </button>
+                    <button onclick="loadPageData()" class="px-3 py-2 bg-white border border-blue-200 text-blue-700 rounded hover:bg-blue-50 text-xs font-medium">
+                        <i class="fas fa-plus"></i> 좌표 추가
+                    </button>
+                </div>
+            </div>
+
+            <!-- (Updated) 전체 프로젝트 백업 -->
+            <div class="space-y-3 pt-4 border-t border-gray-100">
+                <h3 class="font-bold text-gray-500 text-sm cursor-pointer hover:text-gray-700 flex justify-between" onclick="toggleFullBackup()">
+                    <span><i class="fas fa-archive mr-1"></i>전체 프로젝트 백업</span>
+                    <i class="fas fa-chevron-down text-xs"></i>
+                </h3>
+                
+                <div id="fullBackupArea" class="hidden space-y-3">
+                    <textarea id="fullDataArea" class="w-full h-20 p-2 text-xs border rounded resize-none font-mono bg-gray-50" placeholder="전체 데이터(모든 페이지/설정) 코드가 표시됩니다."></textarea>
+                    
+                <div class="grid grid-cols-2 gap-2">
+                        <button onclick="copyFullData()" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs font-medium">
+                            <i class="fas fa-copy"></i> 전체 코드 복사
+                    </button>
+                        <button onclick="loadFullData()" class="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-xs font-medium">
+                            <i class="fas fa-file-import"></i> 전체 불러오기
+                    </button>
+                </div>
+                </div>
+                <!-- 이미지 저장은 항상 보이게 -->
+                <button onclick="downloadImage()" class="w-full px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium mt-2">
+                    <i class="fas fa-image"></i> 현재 화면 이미지 저장
+                </button>
+                <div class="text-right">
+                     <button onclick="clearAll()" class="text-xs text-gray-400 underline hover:text-red-500">모두 지우기</button>
+                </div>
+            </div>
+
+            <!-- 라이선스 및 정보 표기 -->
+            <div class="pt-6 border-t border-gray-100 text-[10px] text-gray-400 leading-relaxed">
+                <p class="font-bold text-gray-500 mb-1">라이선스 및 정보</p>
+                <p>• Icons used under <a href="https://fontawesome.com/license/free" target="_blank" class="hover:underline">Font Awesome Free License</a>.</p>
+                <p>• Built with <a href="https://tailwindcss.com/" target="_blank" class="hover:underline">Tailwind CSS</a> (MIT License).</p>
+                <p>• Font: Noto Sans KR (OFL).</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 오른쪽: 캔버스 및 네비게이션 영역 -->
+    <div class="flex-1 bg-gray-100 p-4 flex flex-col items-center justify-center relative overflow-auto h-[60vh] lg:h-full gap-4">
+        <!-- 캔버스 wrapper -->
+        <div id="canvasWrapper" class="canvas-container relative w-full h-full max-w-[800px] max-h-[800px] aspect-square bg-white">
+            <canvas id="mainCanvas"></canvas>
+            
+            <!-- 동적 입력창들 -->
+            <input type="text" id="input-title" class="floating-input text-lg font-bold w-64" placeholder="제목 입력">
+            <input type="text" id="input-top" class="floating-input w-32" placeholder="Y축 상단">
+            <input type="text" id="input-bottom" class="floating-input w-32" placeholder="Y축 하단">
+            <input type="text" id="input-left" class="floating-input w-32" placeholder="X축 좌측">
+            <input type="text" id="input-right" class="floating-input w-32" placeholder="X축 우측">
+        </div>
+
+        <!-- 페이지 네비게이션 -->
+        <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-lg shadow-sm">
+            <button onclick="changePage(-1)" class="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="text-sm font-bold text-gray-700 min-w-[100px] text-center">
+                <span id="pageIndicator">Page 1 / 1</span>
+            </div>
+            <button onclick="changePage(1)" class="p-2 hover:bg-gray-100 rounded-full text-gray-600">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+            <div class="w-px h-6 bg-gray-200 mx-2"></div>
+            <button onclick="deleteCurrentPage()" class="flex items-center gap-2 px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-md hover:bg-red-50 text-sm font-medium transition" title="현재 페이지 삭제">
+                <i class="fas fa-trash"></i> 페이지 삭제
+            </button>
+            <button onclick="addNewPage()" class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 text-sm font-medium transition">
+                <i class="fas fa-plus"></i> 페이지 추가
+            </button>
+        </div>
+    </div>
+
+    <!-- 궁합 보기 모달 -->
+    <div id="compModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-heart text-pink-500 mr-2"></i>캐릭터 궁합 보기</h2>
+                <button onclick="closeCompModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- 탭 버튼 -->
+            <div class="flex border-b border-gray-200 mb-4">
+                <div id="tabPair" class="tab-btn active" onclick="switchCompTab('pair')">1:1 궁합</div>
+                <div id="tabGroup" class="tab-btn" onclick="switchCompTab('group')">전체 평균</div>
+            </div>
+
+            <!-- 1:1 궁합 컨텐츠 -->
+            <div id="contentPair" class="block">
+                <div class="flex items-center justify-center gap-4 mb-6">
+                    <select id="compChar1" class="border rounded p-2 text-sm w-32" onchange="updateCompResult()">
+                        <option value="">선택</option>
+                    </select>
+                    <i class="fas fa-exchange-alt text-gray-400"></i>
+                    <select id="compChar2" class="border rounded p-2 text-sm w-32" onchange="updateCompResult()">
+                        <option value="">선택</option>
+                    </select>
+                </div>
+                <div class="bg-gray-50 rounded p-4 max-h-60 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-left text-gray-500">
+                                <th class="pb-2 font-medium">테마</th>
+                                <th class="pb-2 font-medium text-right">궁합도</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compResultBody">
+                            <tr>
+                                <td colspan="2" class="text-center py-4 text-gray-400">두 캐릭터를 선택해주세요.</td>
+                            </tr>
+                        </tbody>
+                        <tfoot id="compTotalFooter" class="hidden">
+                            <tr class="border-t border-gray-300 font-bold text-gray-800">
+                                <td class="pt-3">종합 평균</td>
+                                <td class="pt-3 text-right text-pink-600" id="compTotalScore">0%</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 전체 평균 컨텐츠 -->
+            <div id="contentGroup" class="hidden">
+                <div class="bg-gray-50 rounded p-4 max-h-80 overflow-y-auto">
+                    <p class="text-xs text-gray-500 mb-2 text-center">등록된 모든 캐릭터 간의 조합 평균입니다.</p>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-left text-gray-500">
+                                <th class="pb-2 font-medium">테마</th>
+                                <th class="pb-2 font-medium text-right">평균 궁합</th>
+                            </tr>
+                        </thead>
+                        <tbody id="groupResultBody">
+                            <!-- JS로 생성 -->
+                        </tbody>
+                        <tfoot id="groupTotalFooter">
+                            <!-- JS로 생성 -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <p class="text-[10px] text-gray-400 mt-4">
+                * 같은 위치일 때 100%이며, 차이가 클 경우 0% 이하로 떨어질 수 있습니다.<br>
+                * 페이지별 위치를 기준으로 계산됩니다.
+            </p>
+        </div>
+    </div>
+
+    <!-- Toast Message -->
+    <div id="toast">알림 메시지</div>
+
+<script>
+    /**
+     * 전역 상태
+     */
+    const state = {
+        currentPage: 0,
+        pages: [
+            {
+                title: '캐릭터 성향 분포',
+                labels: { top: '선', bottom: '악', left: '혼돈', right: '질서' }
+            },
+            {
+                title: '변화를 대하는 태도',
+                labels: { top: '순응', bottom: '저항', left: '적극', right: '소극' }
+            },
+            {
+                title: '성격 기질 분포',
+                labels: { top: '관용', bottom: '엄격', left: '유순', right: '예민' }
+            }
+        ],
+        characters: [], 
+        draggingId: null,
+        selectedId: null,
+    };
+
+    const colors = [
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6',
+        '#d946ef', '#f43f5e', '#be123c', '#92400e', '#15803d', '#1e40af', '#5b21b6', '#334155'
+    ];
+    let selectedColor = colors[0];
+    let currentCompTab = 'pair';
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvasWrapper');
+    const inputs = {
+        title: document.getElementById('input-title'),
+        top: document.getElementById('input-top'),
+        bottom: document.getElementById('input-bottom'),
+        left: document.getElementById('input-left'),
+        right: document.getElementById('input-right')
+    };
+
+    function init() {
+        const picker = document.getElementById('colorPickerArea');
+        colors.forEach((c, idx) => {
+            const div = document.createElement('div');
+            div.className = `color-option ${idx === 0 ? 'selected' : ''}`;
+            div.style.backgroundColor = c;
+            div.onclick = () => selectColor(div, c);
+            picker.appendChild(div);
+        });
+        const customDiv = document.createElement('div');
+        customDiv.className = 'color-option custom-color-wrapper';
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.className = 'custom-color-input';
+        colorInput.onchange = (e) => {
+            selectedColor = e.target.value;
+            selectColor(customDiv, selectedColor);
+            customDiv.style.background = 'none';
+            customDiv.style.backgroundColor = selectedColor;
+        };
+        customDiv.appendChild(colorInput);
+        picker.appendChild(customDiv);
+
+        Object.keys(inputs).forEach(key => {
+            const el = inputs[key];
+            const saveAndClose = () => {
+                const page = state.pages[state.currentPage];
+                if(key === 'title') page.title = el.value;
+                else page.labels[key] = el.value;
+                el.style.display = 'none';
+                draw();
+            };
+            el.addEventListener('blur', saveAndClose);
+            el.addEventListener('keydown', (e) => {
+                if(e.key === 'Enter') el.blur();
+            });
+        });
+
+        document.getElementById('charName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addCharacter();
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('dblclick', handleDoubleClick);
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleMouseUp);
+
+        updatePageIndicator();
+        renderCharacterList();
+        resizeCanvas();
+    }
+
+    function selectColor(element, color) {
+        document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+        element.classList.add('selected');
+        selectedColor = color;
+    }
+
+    function resizeCanvas() {
+        const rect = wrapper.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        draw();
+    }
+
+    function draw() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const currentPageData = state.pages[state.currentPage];
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = '#e5e7eb';
+        const gridSize = 20;
+        for(let x = cx; x < w; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for(let x = cx; x > 0; x -= gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for(let y = cy; y < h; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+        for(let y = cy; y > 0; y -= gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+        const axisColor = '#374151';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = axisColor;
+        
+        const topMargin = 70;
+        const axisRadius = (h / 2) - topMargin;
+
+        ctx.beginPath(); ctx.moveTo(cx - axisRadius, cy); ctx.lineTo(cx + axisRadius, cy); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(cx, cy - axisRadius); ctx.lineTo(cx, cy + axisRadius); ctx.stroke(); 
+
+        ctx.fillStyle = axisColor;
+        drawArrow(cx + axisRadius, cy, 'right');
+        drawArrow(cx - axisRadius, cy, 'left');
+        drawArrow(cx, cy - axisRadius, 'up');
+        drawArrow(cx, cy + axisRadius, 'down');
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        ctx.font = 'bold 24px "Noto Sans KR"';
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(currentPageData.title, cx, 35);
+
+        ctx.font = 'bold 14px "Noto Sans KR"';
+        ctx.fillStyle = '#4b5563';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+
+        const labelGap = 25;
+        drawOutlinedText(currentPageData.labels.top, cx, cy - axisRadius + labelGap);
+        drawOutlinedText(currentPageData.labels.bottom, cx, cy + axisRadius - labelGap);
+        drawOutlinedText(currentPageData.labels.left, cx - axisRadius + labelGap + 20, cy - 20);
+        drawOutlinedText(currentPageData.labels.right, cx + axisRadius - labelGap - 20, cy - 20);
+
+        state.characters.forEach(char => {
+            const pos = char.positions[state.currentPage];
+            if (!pos) return;
+
+            const screenX = cx + pos.x;
+            const screenY = cy + pos.y;
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+
+            if (char.type === 'image' && char.imageSrc) {
+                const img = new Image();
+                img.src = char.imageSrc;
+                try {
+                    ctx.drawImage(img, screenX - char.width/2, screenY - char.height/2, char.width, char.height);
+                } catch(e) {
+                    ctx.fillStyle = '#ccc';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, 10, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            } else {
+                ctx.fillStyle = char.color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.font = '12px "Noto Sans KR"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const textY = char.type === 'image' ? screenY + char.height/2 + 5 : screenY + 12;
+            
+            const textWidth = ctx.measureText(char.name).width;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillRect(screenX - textWidth/2 - 2, textY, textWidth + 4, 14);
+            
+            ctx.fillStyle = '#1f2937';
+            ctx.fillText(char.name, screenX, textY);
+
+            if (state.selectedId === char.id) {
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 2]);
+                ctx.beginPath();
+                const size = char.type === 'image' ? Math.max(char.width, char.height) + 10 : 25;
+                ctx.arc(screenX, screenY, size/1.5, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+    }
+
+    function drawOutlinedText(text, x, y) {
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+    }
+
+    function drawArrow(x, y, dir) {
+        ctx.beginPath();
+        const headlen = 10;
+        ctx.moveTo(x, y);
+        if (dir === 'left') {
+            ctx.lineTo(x + headlen, y - headlen/2);
+            ctx.lineTo(x + headlen, y + headlen/2);
+        } else if (dir === 'right') {
+            ctx.lineTo(x - headlen, y - headlen/2);
+            ctx.lineTo(x - headlen, y + headlen/2);
+        } else if (dir === 'up') {
+            ctx.lineTo(x - headlen/2, y + headlen);
+            ctx.lineTo(x + headlen/2, y + headlen);
+        } else if (dir === 'down') {
+            ctx.lineTo(x - headlen/2, y - headlen);
+            ctx.lineTo(x + headlen/2, y - headlen);
+        }
+        ctx.fill();
+    }
+
+    function changePage(delta) {
+        const newPage = state.currentPage + delta;
+        if (newPage >= 0 && newPage < state.pages.length) {
+            state.currentPage = newPage;
+            updatePageIndicator();
+            renderCharacterList();
+            Object.values(inputs).forEach(el => el.style.display = 'none');
+            draw();
+        }
+    }
+
+    function addNewPage() {
+        state.pages.push({
+            title: `새 페이지 ${state.pages.length + 1}`,
+            labels: { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }
+        });
+        changePage(state.pages.length - 1 - state.currentPage);
+        showToast('새 페이지가 추가되었습니다.');
+    }
+
+    function deleteCurrentPage() {
+        if (state.pages.length <= 1) {
+            showToast('최소 한 개의 페이지는 필요합니다.');
+            return;
+        }
+        if (!confirm('현재 페이지를 삭제하시겠습니까? 이 페이지에 저장된 캐릭터 위치 정보도 함께 삭제됩니다.')) return;
+
+        const deletedIndex = state.currentPage;
+        state.pages.splice(deletedIndex, 1);
+        state.characters.forEach(char => {
+            delete char.positions[deletedIndex];
+            const newPositions = {};
+            Object.keys(char.positions).forEach(key => {
+                const pageIdx = parseInt(key);
+                if (pageIdx < deletedIndex) {
+                    newPositions[pageIdx] = char.positions[pageIdx];
+                } else if (pageIdx > deletedIndex) {
+                    newPositions[pageIdx - 1] = char.positions[pageIdx];
+                }
+            });
+            char.positions = newPositions;
+        });
+        if (state.currentPage >= state.pages.length) {
+            state.currentPage = state.pages.length - 1;
+        }
+        
+        updatePageIndicator();
+        renderCharacterList();
+        Object.values(inputs).forEach(el => el.style.display = 'none');
+        draw();
+        showToast('페이지가 삭제되었습니다.');
+    }
+
+    function updatePageIndicator() {
+        document.getElementById('pageIndicator').innerText = `Page ${state.currentPage + 1} / ${state.pages.length}`;
+    }
+
+    function renderCharacterList() {
+        const listEl = document.getElementById('characterList');
+        const countEl = document.getElementById('charCount');
+        listEl.innerHTML = '';
+        countEl.innerText = `${state.characters.length}명`;
+
+        if (state.characters.length === 0) {
+            listEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">등록된 캐릭터가 없습니다.</div>';
+            return;
+        }
+
+        state.characters.forEach(char => {
+            const item = document.createElement('div');
+            item.className = `char-item ${state.selectedId === char.id ? 'active' : ''}`;
+            
+            const dot = document.createElement('div');
+            dot.className = 'char-dot';
+            dot.style.backgroundColor = char.color;
+            
+            const name = document.createElement('span');
+            name.className = 'text-sm font-medium text-gray-700 truncate';
+            name.innerText = char.name;
+            
+            const statusDot = document.createElement('div');
+            statusDot.className = 'char-status-dot ' + (char.positions[state.currentPage] ? 'char-status-active' : 'char-status-inactive');
+            statusDot.title = char.positions[state.currentPage] ? '현재 페이지에 배치됨' : '현재 페이지에 배치되지 않음';
+
+            item.appendChild(dot);
+            item.appendChild(name);
+            item.appendChild(statusDot);
+            
+            item.onclick = () => {
+                state.selectedId = char.id;
+                if (!char.positions[state.currentPage]) {
+                    char.positions[state.currentPage] = { x: 0, y: 0 };
+                    showToast(`${char.name}이(가) 현재 페이지에 추가되었습니다.`);
+                }
+                renderCharacterList(); 
+                draw();
+            };
+
+            listEl.appendChild(item);
+        });
+    }
+
+    function toggleImageUpload(isImage) {
+        const colorArea = document.getElementById('colorPickerArea');
+        const imageArea = document.getElementById('imageUploadArea');
+        if (isImage) {
+            colorArea.classList.add('hidden');
+            imageArea.classList.remove('hidden');
+        } else {
+            colorArea.classList.remove('hidden');
+            imageArea.classList.add('hidden');
+        }
+    }
+
+    async function addCharacter() {
+        const nameInput = document.getElementById('charName');
+        const name = nameInput.value.trim();
+        if (!name) {
+            showToast('이름을 입력해주세요.');
+            return;
+        }
+
+        const type = document.querySelector('input[name="charType"]:checked').value;
+        const newChar = {
+            id: Date.now().toString(),
+            name: name,
+            type: type,
+            color: selectedColor,
+            positions: {} 
+        };
+        newChar.positions[state.currentPage] = { x: 0, y: 0 };
+
+        if (type === 'image') {
+            const fileInput = document.getElementById('imageInput');
+            if (fileInput.files && fileInput.files[0]) {
+                try {
+                    const resizedData = await resizeImage(fileInput.files[0]);
+                    newChar.imageSrc = resizedData.src;
+                    newChar.width = resizedData.width;
+                    newChar.height = resizedData.height;
+                } catch (e) {
+                    showToast('이미지 처리 실패');
+                    return;
+                }
+            } else {
+                showToast('이미지를 선택해주세요.');
+                return;
+            }
+        }
+
+        state.characters.push(newChar);
+        state.selectedId = newChar.id; 
+        renderCharacterList();
+        draw();
+        nameInput.value = '';
+        showToast('캐릭터가 추가되었습니다.');
+    }
+
+    function deleteSelected() {
+        if (!state.selectedId) {
+            showToast('삭제할 캐릭터를 먼저 선택(클릭)해주세요.');
+            return;
+        }
+        const idx = state.characters.findIndex(c => c.id === state.selectedId);
+        if (idx > -1) {
+            state.characters.splice(idx, 1);
+            state.selectedId = null;
+            state.draggingId = null;
+            renderCharacterList();
+            draw();
+            showToast('캐릭터가 삭제되었습니다.');
+        }
+    }
+
+    function resizeImage(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxWidth = 50;
+                    const scale = maxWidth / img.width;
+                    const width = maxWidth;
+                    const height = img.height * scale;
+                    const cvs = document.createElement('canvas');
+                    cvs.width = width;
+                    cvs.height = height;
+                    const c = cvs.getContext('2d');
+                    c.drawImage(img, 0, 0, width, height);
+                    resolve({ src: cvs.toDataURL('image/png'), width, height });
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        return {
+            x: clientX - rect.left - (canvas.width / 2),
+            y: clientY - rect.top - (canvas.height / 2)
+        };
+    }
+
+    function handleMouseDown(e) {
+        const pos = getMousePos(e);
+        let found = false;
+        for (let i = state.characters.length - 1; i >= 0; i--) {
+            const char = state.characters[i];
+            const charPos = char.positions[state.currentPage];
+            if (!charPos) continue;
+
+            const radius = char.type === 'image' ? 30 : 15;
+            const dist = Math.sqrt(Math.pow(pos.x - charPos.x, 2) + Math.pow(pos.y - charPos.y, 2));
+            
+            if (dist < radius) {
+                state.draggingId = char.id;
+                state.selectedId = char.id;
+                found = true;
+                renderCharacterList();
+                draw();
+                break;
+            }
+        }
+        if (!found) {
+            state.selectedId = null;
+            renderCharacterList();
+            draw();
+        }
+    }
+
+    function handleMouseMove(e) {
+        if (!state.draggingId) return;
+        const pos = getMousePos(e);
+        const char = state.characters.find(c => c.id === state.draggingId);
+        if (char && char.positions[state.currentPage]) {
+            char.positions[state.currentPage] = { x: pos.x, y: pos.y };
+            draw();
+        }
+        e.preventDefault();
+    }
+
+    function handleMouseUp() {
+        state.draggingId = null;
+    }
+    
+    function handleTouchStart(e) { handleMouseDown(e); }
+    function handleTouchMove(e) { handleMouseMove(e); }
+
+    function handleDoubleClick(e) {
+        const pos = getMousePos(e); 
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX - rect.left;
+        const clientY = e.clientY - rect.top;
+
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        
+        const topMargin = 70;
+        const axisRadius = (h / 2) - topMargin;
+        const labelGap = 25;
+
+        const targets = [
+            { key: 'title', x: cx, y: 35, w: 300, h: 40 },
+            { key: 'top', x: cx, y: cy - axisRadius + labelGap, w: 150, h: 30 },
+            { key: 'bottom', x: cx, y: cy + axisRadius - labelGap, w: 150, h: 30 },
+            { key: 'left', x: cx - axisRadius + labelGap + 20, y: cy - 20, w: 150, h: 30 },
+            { key: 'right', x: cx + axisRadius - labelGap - 20, y: cy - 20, w: 150, h: 30 }
+        ];
+
+        for(let t of targets) {
+            if (Math.abs(clientX - t.x) < t.w / 2 && Math.abs(clientY - t.y) < t.h / 2) {
+                openInput(t.key, t.x, t.y);
+                return;
+            }
+        }
+    }
+
+    function openInput(key, x, y) {
+        const input = inputs[key];
+        if (!input) return;
+        input.style.left = `${x}px`;
+        input.style.top = `${y}px`;
+        input.style.display = 'block';
+        
+        const page = state.pages[state.currentPage];
+        if (key === 'title') input.value = page.title;
+        else input.value = page.labels[key];
+        input.focus();
+    }
+
+    /* --- 데이터 관리 --- */
+
+    // 1. 현재 페이지 간편 공유
+    function copyPageData() {
+        const currentChars = [];
+        state.characters.forEach(c => {
+            const pos = c.positions[state.currentPage];
+            if (pos) {
+                currentChars.push({
+                n: c.name,
+                c: c.color,
+                x: Math.round(pos.x),
+                y: Math.round(pos.y)
+                });
+            }
+        });
+        const jsonStr = JSON.stringify(currentChars);
+        const textArea = document.getElementById('pageDataArea');
+        textArea.value = jsonStr;
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('현재 페이지 좌표 데이터가 복사되었습니다.');
+        } catch (err) {
+            showToast('복사 실패');
+        }
+    }
+
+    function loadPageData() {
+        const textArea = document.getElementById('pageDataArea');
+        const raw = textArea.value.trim();
+        if (!raw) {
+            showToast('좌표 데이터를 입력해주세요.');
+            return;
+        }
+        try {
+            const loadedChars = JSON.parse(raw);
+            if (!Array.isArray(loadedChars)) throw new Error('Invalid format');
+
+            loadedChars.forEach(lc => {
+                const newChar = {
+                    id: Date.now() + Math.random().toString(),
+                    name: lc.n,
+                    type: 'dot',
+                    color: lc.c,
+                    positions: {}
+                };
+                newChar.positions[state.currentPage] = { x: lc.x, y: lc.y };
+                state.characters.push(newChar);
+            });
+
+            renderCharacterList();
+            draw();
+            showToast(`${loadedChars.length}명의 캐릭터가 추가되었습니다.`);
+            textArea.value = '';
+        } catch (e) {
+            console.error(e);
+            showToast('올바르지 않은 데이터 형식입니다.');
+        }
+    }
+
+    // 2. 전체 프로젝트 백업
+    function toggleFullBackup() {
+        const area = document.getElementById('fullBackupArea');
+        area.classList.toggle('hidden');
+    }
+
+    function copyFullData() {
+        const dataStr = JSON.stringify(state);
+        const encoded = btoa(unescape(encodeURIComponent(dataStr)));
+        const textArea = document.getElementById('fullDataArea');
+        textArea.value = encoded;
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('전체 프로젝트 데이터가 복사되었습니다.');
+        } catch (err) {
+            showToast('복사 실패');
+        }
+    }
+
+    function loadFullData() {
+        const textArea = document.getElementById('fullDataArea');
+        const raw = textArea.value.trim();
+        if (!raw) {
+            showToast('백업 코드를 입력해주세요.');
+            return;
+        }
+
+        try {
+            const decoded = decodeURIComponent(escape(atob(raw)));
+            const data = JSON.parse(decoded);
+            
+            if (data.characters && data.characters.length > 0 && !data.characters[0].positions) {
+                data.characters.forEach(c => {
+                    c.positions = { 0: { x: c.x || 0, y: c.y || 0 } };
+                    delete c.x;
+                    delete c.y;
+                });
+            }
+            if (!data.pages && data.title) {
+                data.pages = [{
+                    title: data.title,
+                    labels: data.labels || { top:'', bottom:'', left:'', right:'' }
+                }];
+                data.currentPage = 0;
+            }
+
+            if (data.pages) state.pages = data.pages;
+            if (data.characters) state.characters = data.characters;
+            if (state.currentPage >= state.pages.length) state.currentPage = 0;
+
+            updatePageIndicator();
+            renderCharacterList();
+            draw();
+            showToast('전체 프로젝트를 불러왔습니다.');
+        } catch (e) {
+            console.error(e);
+            showToast('데이터 형식이 올바르지 않습니다.');
+        }
+    }
+
+    function clearAll() {
+        if(confirm('모든 캐릭터를 삭제하시겠습니까?')) {
+            state.characters = [];
+            state.selectedId = null;
+            renderCharacterList();
+            draw();
+        }
+    }
+
+    function downloadImage() {
+        const prevSelected = state.selectedId;
+        state.selectedId = null;
+        draw();
+
+        const link = document.createElement('a');
+        link.download = `character_graph_page${state.currentPage + 1}_${Date.now()}.png`;
+        link.href = canvas.toDataURL();
+        link.click();
+
+        state.selectedId = prevSelected;
+        draw();
+        showToast('이미지가 저장되었습니다.');
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    /* --- 궁합 모달 관련 기능 --- */
+    function openCompModal() {
+        const select1 = document.getElementById('compChar1');
+        const select2 = document.getElementById('compChar2');
+        
+        select1.innerHTML = '<option value="">선택</option>';
+        select2.innerHTML = '<option value="">선택</option>';
+
+        state.characters.forEach(char => {
+            const opt1 = document.createElement('option');
+            opt1.value = char.id;
+            opt1.innerText = char.name;
+            select1.appendChild(opt1);
+
+            const opt2 = document.createElement('option');
+            opt2.value = char.id;
+            opt2.innerText = char.name;
+            select2.appendChild(opt2);
+        });
+
+        document.getElementById('compModal').classList.add('open');
+        switchCompTab(currentCompTab);
+    }
+
+    function closeCompModal() {
+        document.getElementById('compModal').classList.remove('open');
+    }
+
+    function switchCompTab(tab) {
+        currentCompTab = tab;
+        document.getElementById('tabPair').className = `tab-btn ${tab === 'pair' ? 'active' : ''}`;
+        document.getElementById('tabGroup').className = `tab-btn ${tab === 'group' ? 'active' : ''}`;
+        
+        if (tab === 'pair') {
+            document.getElementById('contentPair').classList.remove('hidden');
+            document.getElementById('contentGroup').classList.add('hidden');
+            updateCompResult(); 
+        } else {
+            document.getElementById('contentPair').classList.add('hidden');
+            document.getElementById('contentGroup').classList.remove('hidden');
+            updateGroupResult(); 
+        }
+    }
+
+    function calculatePairScore(char1, char2, pageIdx) {
+        const pos1 = char1.positions[pageIdx];
+        const pos2 = char2.positions[pageIdx];
+        
+        if (!pos1 || !pos2) return null;
+
+        const dxPx = Math.abs(pos1.x - pos2.x);
+        const dyPx = Math.abs(pos1.y - pos2.y);
+        const dxGrid = dxPx / 20;
+        const dyGrid = dyPx / 20;
+        const scoreX = 50 - (dxGrid / 22 * 50);
+        const scoreY = 50 - (dyGrid / 22 * 50);
+        return scoreX + scoreY;
+    }
+
+    function updateCompResult() {
+        const id1 = document.getElementById('compChar1').value;
+        const id2 = document.getElementById('compChar2').value;
+        const tbody = document.getElementById('compResultBody');
+        const tfoot = document.getElementById('compTotalFooter');
+        const totalScoreEl = document.getElementById('compTotalScore');
+
+        if (!id1 || !id2) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-400">두 캐릭터를 선택해주세요.</td></tr>';
+            tfoot.classList.add('hidden');
+            return;
+        }
+
+        if (id1 === id2) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-red-400">서로 다른 캐릭터를 선택해주세요.</td></tr>';
+            tfoot.classList.add('hidden');
+            return;
+        }
+
+        const char1 = state.characters.find(c => c.id === id1);
+        const char2 = state.characters.find(c => c.id === id2);
+
+        let totalSum = 0;
+        let validPageCount = 0;
+        let html = '';
+
+        state.pages.forEach((page, idx) => {
+            const pageScore = calculatePairScore(char1, char2, idx);
+            
+            if (pageScore === null) {
+                html += `
+                    <tr class="border-b border-gray-100 last:border-0 opacity-50">
+                        <td class="py-2 text-gray-500">${page.title}</td>
+                        <td class="py-2 text-right text-gray-400">-</td>
+                    </tr>
+                `;
+            } else {
+                totalSum += pageScore;
+                validPageCount++;
+
+                const formattedScore = pageScore.toFixed(1);
+                let scoreColor = 'text-gray-700';
+                if (pageScore >= 80) scoreColor = 'text-pink-600 font-bold';
+                else if (pageScore < 0) scoreColor = 'text-blue-600';
+
+                html += `
+                    <tr class="border-b border-gray-100 last:border-0">
+                        <td class="py-2 text-gray-700">${page.title}</td>
+                        <td class="py-2 text-right ${scoreColor}">${formattedScore}%</td>
+                    </tr>
+                `;
+            }
+        });
+
+        const avgScore = validPageCount > 0 ? (totalSum / validPageCount) : 0;
+        const avgText = validPageCount > 0 ? `${avgScore.toFixed(1)}%` : '-';
+        
+        tbody.innerHTML = html;
+        totalScoreEl.innerText = avgText;
+        tfoot.classList.remove('hidden');
+    }
+
+    function updateGroupResult() {
+        const chars = state.characters;
+        const tbody = document.getElementById('groupResultBody');
+        const tfoot = document.getElementById('groupTotalFooter');
+
+        if (chars.length < 2) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-400">캐릭터가 2명 이상이어야 합니다.</td></tr>';
+            tfoot.innerHTML = '';
+            return;
+        }
+
+        let overallTotalSum = 0;
+        let validPageCountGlobal = 0;
+        let html = '';
+
+        state.pages.forEach((page, pageIdx) => {
+            let pageTotalScore = 0;
+            let pairCount = 0;
+            for(let i=0; i<chars.length; i++) {
+                for(let j=i+1; j<chars.length; j++) {
+                    const score = calculatePairScore(chars[i], chars[j], pageIdx);
+                    if (score !== null) {
+                        pageTotalScore += score;
+                    pairCount++;
+                    }
+                }
+            }
+
+            if (pairCount > 0) {
+                const pageAvg = pageTotalScore / pairCount;
+                overallTotalSum += pageAvg;
+                validPageCountGlobal++;
+
+                const formattedScore = pageAvg.toFixed(1);
+                let scoreColor = 'text-gray-700';
+                if (pageAvg >= 80) scoreColor = 'text-pink-600 font-bold';
+                else if (pageAvg < 0) scoreColor = 'text-blue-600';
+
+                html += `
+                    <tr class="border-b border-gray-100 last:border-0">
+                        <td class="py-2 text-gray-700">${page.title}</td>
+                        <td class="py-2 text-right ${scoreColor}">${formattedScore}%</td>
+                    </tr>
+                `;
+            } else {
+                // 해당 페이지에 유효한 쌍이 하나도 없음
+                html += `
+                    <tr class="border-b border-gray-100 last:border-0 opacity-50">
+                        <td class="py-2 text-gray-500">${page.title}</td>
+                        <td class="py-2 text-right text-gray-400">-</td>
+                    </tr>
+                `;
+            }
+        });
+
+        const grandAvg = validPageCountGlobal > 0 ? (overallTotalSum / validPageCountGlobal) : 0;
+        const grandText = validPageCountGlobal > 0 ? `${grandAvg.toFixed(1)}%` : '-';
+        
+        tbody.innerHTML = html;
+        tfoot.innerHTML = `
+            <tr class="border-t border-gray-300 font-bold text-gray-800">
+                <td class="pt-3">종합 전체 평균</td>
+                <td class="pt-3 text-right text-pink-600">${grandText}</td>
+            </tr>
+        `;
+    }
+
+    init();
+</script>
+</body>
+</html>
