@@ -1015,21 +1015,36 @@
             const loadedChars = JSON.parse(raw);
             if (!Array.isArray(loadedChars)) throw new Error('Invalid format');
 
+            let addedCount = 0;
+            let updatedCount = 0;
+
             loadedChars.forEach(lc => {
-                const newChar = {
-                    id: Date.now() + Math.random().toString(),
-                    name: lc.n,
-                    type: 'dot',
-                    color: lc.c,
-                    positions: {}
-                };
-                newChar.positions[state.currentPage] = { x: lc.x, y: lc.y };
-                state.characters.push(newChar);
+                const existingChar = state.characters.find(c => c.name === lc.n);
+
+                if (existingChar) {
+                    existingChar.positions[state.currentPage] = { x: lc.x, y: lc.y };
+                    updatedCount++;
+                } else {
+                    const newChar = {
+                        id: Date.now() + Math.random().toString(),
+                        name: lc.n,
+                        type: 'dot',
+                        color: lc.c,
+                        positions: {}
+                    };
+                    newChar.positions[state.currentPage] = { x: lc.x, y: lc.y };
+                    state.characters.push(newChar);
+                    addedCount++;
+                }
             });
 
             renderCharacterList();
             draw();
-            showToast(`${loadedChars.length}명의 캐릭터가 추가되었습니다.`);
+            
+            let msg = [];
+            if (addedCount > 0) msg.push(`${addedCount}명 추가`);
+            if (updatedCount > 0) msg.push(`${updatedCount}명 업데이트`);
+            showToast(msg.length > 0 ? msg.join(', ') + ' 완료되었습니다.' : '변경 사항이 없습니다.');
             textArea.value = '';
         } catch (e) {
             console.error(e);
